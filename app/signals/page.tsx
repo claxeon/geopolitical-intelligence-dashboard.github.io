@@ -4,6 +4,9 @@ import { bandTreasuryConfidence } from "@/lib/signals/treasuryBands";
 import { fetchOilImports } from "@/lib/data/energy";
 import { deriveOilDependencySignal } from "@/lib/signals/oilDependency";
 
+// Force dynamic rendering to prevent static export
+export const dynamic = 'force-dynamic';
+
 interface SignalResponse {
   treasurySignal: {
     date: string
