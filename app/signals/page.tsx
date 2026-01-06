@@ -1,6 +1,8 @@
-"use client"
-
-import { useEffect, useState } from "react"
+import { fetchTreasuryTIC } from "@/lib/data/treasury";
+import { deriveTreasuryConfidenceSignal } from "@/lib/signals/treasuryConfidence";
+import { bandTreasuryConfidence } from "@/lib/signals/treasuryBands";
+import { fetchOilImports } from "@/lib/data/energy";
+import { deriveOilDependencySignal } from "@/lib/signals/oilDependency";
 
 interface SignalResponse {
   treasurySignal: {
@@ -21,29 +23,38 @@ interface SignalResponse {
   }
 }
 
-export default function SignalsPage() {
-  const [data, setData] = useState<SignalResponse | null>(null)
-  const [loading, setLoading] = useState(true)
-  const [error, setError] = useState<string | null>(null)
+async function getSignalData(): Promise<SignalResponse> {
+  try {
+    const [treasurySnapshot, oilImports] = await Promise.all([
+      fetchTreasuryTIC(),
+      fetchOilImports(),
+    ]);
 
-  useEffect(() => {
-    async function fetchSignals() {
-      try {
-        const res = await fetch("/api/signals")
-        if (!res.ok) {
-          throw new Error("Failed to fetch signals")
-        }
-        const json = await res.json()
-        setData(json)
-      } catch (err) {
-        setError(err instanceof Error ? err.message : "Unknown error")
-      } finally {
-        setLoading(false)
-      }
-    }
+    const treasurySignal = bandTreasuryConfidence(
+      deriveTreasuryConfidenceSignal(treasurySnapshot)
+    );
 
-    fetchSignals()
-  }, [])
+    const oilSignal = deriveOilDependencySignal(oilImports);
+
+    return {
+      treasurySignal,
+      oilSignal,
+    };
+  } catch (error) {
+    console.error("Failed to fetch signals:", error);
+    throw new Error("Failed to load signals");
+  }
+}
+
+export default async function SignalsPage() {
+  let data: SignalResponse | null = null;
+  let error: string | null = null;
+
+  try {
+    data = await getSignalData();
+  } catch (err) {
+    error = err instanceof Error ? err.message : "Unknown error";
+  }
 
   const getBandColor = (band: string) => {
     switch (band) {
@@ -67,12 +78,6 @@ export default function SignalsPage() {
         <p className="text-neutral-400 mb-12">
           Real-time monitoring of Treasury TIC holdings and oil import dependency indicators
         </p>
-
-        {loading && (
-          <div className="text-center py-12">
-            <p className="text-neutral-400">Loading signals...</p>
-          </div>
-        )}
 
         {error && (
           <div className="bg-red-900 bg-opacity-20 border border-red-700 rounded-lg p-6 mb-8">
